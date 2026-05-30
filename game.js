@@ -31,22 +31,42 @@ window.addEventListener('keydown',(e) => {
     keys[e.key] = true;
     if (keys['r']){
         delete keys['r'];
+        player.scoreMult = 1;
         player.x = window_width/45;
         player.y = window_height/2;
         if (enemyArr)
             kill = true; 
-            if (player.health != 0){
+            if (player.health > 0){
                 alert("Restarting");
-                player.health = 5;
+                player.health = 10;
                 player.score = 0;
+                player.money = 0;
+                player.invisPotion = 0;
+                player.invincPotion = 0;
             }
-        if (player.health == 0){
-            player.health = 5;
+        else if(player.health > 0){
+            alert("Next room");
+            market();
+        }
+        if (player.health <= 0){
+            player.health = 10;
             player.score = 0;
+            player.money = 0;
+            player.invisPotion = 0;
+            player.invincPotion = 0;
             kill = false;
         }
+        keys = {};
         init();
         
+    }
+    if (keys['i']){
+        delete keys['i'];
+        invisibility();
+    }
+    if (keys['v']){
+        delete keys['v'];
+        invincibility();
     }
 });
 
@@ -80,30 +100,96 @@ let roomArr = [];
 let enemyArr = [];
 let player;
 let bulletArr = [];
+let coinArr = [];
 
 function drawHUD(){
     let score = player.score;
     let health = player.health * 10;
+    let money = player.money;
     c.fillStyle = 'white';
-    c.font = '50 px Arial';
+    c.font = '12px Arial';
     c.fillText(`Score: ${score}`,20,30);
     c.fillText(`Health: ${health}`,window_width-150,30);
+    c.fillText(`Money: ${money}`,window_width-150,60);
+    c.fillText(`Invisibility Potions: ${player.invisPotion}`,120,30);
+    c.fillText(`Invincibility Potions: ${player.invincPotion}`,250,30);
+    c.fillText(`Current Biome: ${biome}`,window_width/2-50,30);
 }
+
+let biome;
+let die;
+
+function biomeGeneration(){
+    player.speed = 2;
+    player.maxDist = maxDist;
+    let die = randInt(1,6);
+    if (die == 1){
+        biome = 'Smoke Filled';
+        canvas.style.backgroundColor = 'rgb(120, 120, 120)';
+        // Visibility reduced by 50%
+        player.maxDist = maxDist/2;
+    }
+    else if (die == 2){
+        biome = 'Drainage System';
+        canvas.style.backgroundColor = 'rgb(49, 65, 156)';
+        // Speed reduced by 0.5
+        player.speed = 1.5;
+    }
+    else if (die == 3){
+        biome = 'Gas Chamber';
+        canvas.style.backgroundColor = 'rgb(184, 157, 140)';
+        // Health reduced by 1 every two seconds until player finds the mask (which is dropped by tanks and snipers)
+        player.poisoned = true;
+         let poisonInterval = setInterval(() => {
+            if (biome != 'Gas Chamber'){  
+                player.poisoned = false;
+                clearInterval(poisonInterval);
+                return;
+            }
+            if (player.poisoned){
+                player.health -= 0.1;
+            }
+            else{
+                clearInterval(poisonInterval);
+            }
+        }, 2000);
+    }
+    else if (die == 4){
+        biome = 'Ice';
+        canvas.style.backgroundColor = 'rgb(200, 255, 255)';
+        // Speed increased by 1.5
+        player.speed = 3;
+    }
+    else if (die == 5){
+        biome = 'Overgrown';
+        canvas.style.backgroundColor = 'rgb(100, 255, 100)';
+        // Enemies have 2 extra health but drop coins more often
+    }
+    else{
+        biome = 'Cursed';
+        canvas.style.backgroundColor = 'rgb(150, 0, 150)';
+        // There are double the amount of snipers but no exploding enemies
+    }
+}
+
+
 
 function init(){
     // console.log("initializing");
     roomArr = [];
     enemyArr = [];
-    bulletArr = []
+    bulletArr = [];
+    coinArr = [];
     for (let i=1;i<17;i+=2){
         for (let j=1;j<9;j+=2){
             roomArr.push(new Room(i*len,j*len));
             let newx = Math.random()*(len - len2 - 2*border) + border;
             let newy = Math.random()*(len - len2 - 2*border) + border;
             enemyArr.push(new Enemy(i*len+newx+len2*0.35,j*len+newy+len2*0.35));
+            enemyArr[enemyArr.length-1].health += 2*(biome == 'Overgrown');
         }
     }
-    
+    biomeGeneration();
     animate();
 }
 
@@ -114,8 +200,16 @@ function animate(){
         roomArr[i].draw();
     }   
     for (let i=0;i<enemyArr.length;i++){
+        if (enemyArr[i].cloaked && dist(enemyArr[i].x, enemyArr[i].y, player.x, player.y) < enemyArr[i].maxDist/4){
+            enemyArr[i].cloaked = false;
+        }
+        if (enemyArr[i].cloaked && !enemyArr[i].alerted)
+            continue;
         enemyArr[i].draw();
     }  
+    for (let i=0;i<coinArr.length;i++){
+        coinArr[i].draw();
+    }
     bulletArr.forEach( (bullet) => {
         bullet.draw();
     })
@@ -126,7 +220,7 @@ function animate(){
     player.draw();
     
     drawHUD();
-    if (player.health == 0){
+    if (player.health <= 0){
         new Audio("player_death.wav").play();
         alert("You have lost, if you wanna restart then press r");
         return;
@@ -134,13 +228,14 @@ function animate(){
     if (enemyArr == []){
         new Audio("winning.mp3").play();
         alert("You have cleared this floor!, if you would like to continue, press r");
-        
         return;
     }
     if (kill){
         kill = false;
         return;
-    }        
+    }  
+    pickUpCoin();      
+    
     requestAnimationFrame(animate);
 }
 
@@ -200,6 +295,7 @@ class Room{
     }
 }
 
+
 function checkCollisionWall(blob){
     let Wall = false;
     roomArr.forEach((room) => {
@@ -214,7 +310,6 @@ function checkCollisionWall(blob){
                     return Wall;
                 }                
                     
-                // console.log("Touched wall at " + wall.x + ", " + wall.y);
                 if ((door.rand%2==0 && blob.x-blob.r>door.x && blob.x+blob.r<door.x+door.w))
                     Wall = false;
                 if ((door.rand%2!=0 && blob.y-blob.r>door.y && blob.y+blob.r<door.y+door.h))
@@ -227,10 +322,8 @@ function checkCollisionWall(blob){
 
 function checkCollision(blob1,blob2){
     if (dist(blob1.x,blob1.y,blob2.x,blob2.y) <= blob1.r + blob2.r){
-        console.log(dist(blob1.x,blob2.x,blob1.y,blob2.y));
-        console.log(blob1.r + blob2.r);
         return true;
-        }
+    }
     return false;
 }
 
@@ -261,41 +354,87 @@ function MOVEPlayer(){
 
 function healthBar(blob){
     c.fillStyle = 'green';
-    let width = len2/5;
+    let width = len2/7;
     c.fillRect(blob.x-width*blob.health/2,blob.y-2*blob.r,width*blob.health,blob.r/2);
 }
 
 class Player{
     constructor(x,y){
         this.score = 0;
-        this.health = 5;
+        this.health = 10;
+        this.money = 0;
         this.x = x;
         this.y = y;
         this.r = len2*0.3;
         this.speed = 2;
+        this.damage = 1;
+        this.shield = 0;
+        this.visible = true;
+        this.scoreMult = 1;
+        this.invisPotion = 0;
+        this.invincPotion = 0;
+        this.border = 1;
+        this.color = 'blue';
+        this.poisoned = false;
+        this.maxDist = maxDist;
+
         this.draw();
     }
     draw(){
         c.beginPath();
         c.arc(this.x,this.y,this.r,0,Math.PI*2);
         c.strokeStyle = 'black';
-        c.lineWidth = 1;
+        c.lineWidth = this.border;
         c.stroke();
-        c.fillStyle = 'blue';
+        c.fillStyle = this.color;
         c.fill();
         healthBar(this);
-        // console.log(this.speed);
     }
 }
 
 class Enemy{
     constructor(x,y){
-        this.health = 3;
+        this.health = 6;
         this.x = x;
         this.y = y;
         this.r = len2*0.3;
+        this.maxDist = maxDist;
         this.alerted = false;
         this.cooldown = 0;
+        this.amountSec = 60;
+        this.damage = 1;
+        this.sniper = false;
+        this.exploding = false;
+        this.cloaked = false;
+        this.tank = false;
+        this.fillStyle = 'red';
+        let dice = randInt(1,20);
+        if (dice == 10 || (biome == 'Cursed' && dice == 20)){
+            this.sniper = true;
+            this.damage = 3;
+            this.amountSec = 120;
+            this.fillStyle = 'purple';
+            this.maxDist = maxDist*2;
+            //snipers shoot every 2 seconds but do 3 damage instead of 1. Also they have a better view
+        }
+        if (dice == 9 && biome != 'Cursed'){
+            this.health = 1;
+            this.exploding = true;
+            this.fillStyle = 'black';
+            //exploding enemies have 1 health but when they die, they do a damage of 3 in a radius of 2*len2
+        }
+        if (dice == 8){
+            this.cloaked = true;
+            this.fillStyle = 'white';
+            //cloaked enemies are invisible until they shoot, and then they become visible for 3 seconds
+        }
+        if (dice == 7){
+            this.tank = true;
+            this.health = 9;
+            this.amountSec = 90;
+            this.fillStyle = 'orange';
+            //tanks have 3 extra health but shoot every 1.5 seconds instead of every second
+        }
         this.draw();
     } 
     draw(){
@@ -304,21 +443,26 @@ class Enemy{
         c.strokeStyle = 'black';
         c.lineWidth = 1;
         c.stroke();
-        c.fillStyle = 'red';
+        c.fillStyle = this.fillStyle;
         c.fill();
         healthBar(this);
+        // alert enemies if player is in line of sight and within a particular radius, then shoot every second
         if (this.cooldown > 0) this.cooldown--;
         if (this.alerted && this.cooldown==0){
             this.shoot();
-            this.cooldown = 60;
+            this.cooldown = this.amountSec;
         }
     }
     shoot(){
+        if (!player.visible || this.cloaked){
+            return;
+        }
         let tan = (player.y - this.y)/(this.x-player.x)*(-1);
         let up = 1;
         if (player.x < this.x)
             up=-1;
         bulletArr.push(new Bullet(this.x,this.y,this.r,tan,up))
+        bulletArr[bulletArr.length-1].blob = this;
     }
 }
 
@@ -336,14 +480,24 @@ class Bullet{
         
         this.r = 5;
         this.range = false;
+        this.blob = null;
+        this.bounce = 4;
         this.draw();
     }
     draw(){
-        if (this.x>=innerWidth-this.r || this.x<=this.r)
-        this.dx=-this.dx;
+        if (this.x>=innerWidth-this.r || this.x<=this.r){
+            this.dx=-this.dx;
+            this.bounce--;
+        }
 
-        if (this.y>=innerHeight-this.r || this.y<=this.r)
+        if (this.y>=innerHeight-this.r || this.y<=this.r){
             this.dy=-this.dy;
+            this.bounce--;
+        }
+
+        if (this.bounce<0){
+            bulletArr = bulletArr.filter(bullet => bullet != this);
+        }
 
         this.x+=this.dx;
         this.y+=this.dy;
@@ -351,10 +505,33 @@ class Bullet{
         enemyArr.forEach( (enemy) => {
             if (this.range && checkCollision(this,enemy)){
                 bulletArr = bulletArr.filter(bullet => bullet != this);
-                enemy.health--;
-                if (enemy.health == 0){
-                    new Audio("dying_enemy.wav").play();
+
+                enemy.health-= this.blob.damage;
+                if (enemy.health <= 0){
+                    
                     player.score += 10;
+                    if (enemy.exploding){
+                        new Audio("explosion.mp3").play();
+                        enemyArr.forEach((otherEnemy) => {
+                            if (otherEnemy != enemy && dist(enemy.x,enemy.y,otherEnemy.x,otherEnemy.y) <= 2*len2){
+                                otherEnemy.health -= 3;
+                                if (otherEnemy.health <= 0){
+                                    new Audio("dying_enemy.m4a").play();
+                                    player.score += 10;
+                                    dropCoin(otherEnemy);
+                                    enemyArr = enemyArr.filter(Enemy => Enemy != otherEnemy);
+                                }
+                            }
+                        })
+                        if (dist(enemy.x,enemy.y,player.x,player.y) <= 2*len2){
+                            player.health -= 3*(1-player.shield);
+                        }
+                    }
+                    else{
+                        dropCoin(enemy);
+                        new Audio("dying_enemy.m4a").play();
+                    }
+                    
                     enemyArr = enemyArr.filter(Enemy => Enemy != enemy);
                 }
             }
@@ -362,7 +539,7 @@ class Bullet{
 
         if (this.range && checkCollision(this,player)){
             bulletArr = bulletArr.filter(bullet => bullet != this);
-            player.health--;  
+            player.health = player.health - this.blob.damage*(1-player.shield);  
         }
         c.beginPath();
         c.arc(this.x,this.y,this.r,0,Math.PI*2);
@@ -383,6 +560,7 @@ class Bullet{
             else{
                 this.dy *= -1;
             }
+            this.bounce--;
         }
         this.x+=this.dx;
         this.y+=this.dy;
@@ -398,6 +576,7 @@ window.addEventListener('click', (e) => {
         up=-1;
     
     bulletArr.push(new Bullet(player.x,player.y,player.r,tan,up));
+    bulletArr[bulletArr.length-1].blob = player;
 })
 
 // Making the radial visibility
@@ -418,6 +597,7 @@ let rayCount = 50;
 function drawRadialVision() {
     c.beginPath();
     c.rect(0, 0, window_width, window_height);
+    let maxDist = player.maxDist;
     
     c.moveTo(player.x, player.y);
     let playerAngle = Math.atan2(mouse.y - player.y, mouse.x - player.x); 
@@ -450,7 +630,6 @@ function getClosestIntersection(x, y, angle) {
             let hit = castRay(x, y, angle, wall);
             
             if (hit) {
-                // We add a tiny 1-pixel buffer to account for JavaScript floating-point math rounding.
                 let hitIsInsideDoor = (
                     hit.x >= door.x && 
                     hit.x <= door.x + door.w &&
@@ -458,7 +637,7 @@ function getClosestIntersection(x, y, angle) {
                     hit.y <= door.y + door.h
                 );
 
-                // 3. Only count the hit if it is NOT inside the door gap
+                // Only count the hit if it is NOT inside the door gap
                 if (!hitIsInsideDoor && hit.dist < minDistance) {
                     minDistance = hit.dist;
                     closest = hit;
@@ -503,26 +682,143 @@ function castRay(x, y, angle, wall) {
 
 function checkEnemyVisibility() {
     enemyArr.forEach(enemy => {
-        // 1. Distance Check (Using your existing maxDist variable)
+        // Distance Check
         let distanceToPlayer = dist(enemy.x, enemy.y, player.x, player.y);
         
-        if (distanceToPlayer > maxDist) {
+        if (distanceToPlayer > enemy.maxDist) {
             enemy.alerted = false;
-            return; // Too far away, move to next enemy
+            return;
         }
 
-        // 2. Line of Sight Check 
         // Cast a ray from the enemy to the player
         let angleToPlayer = Math.atan2(player.y - enemy.y, player.x - enemy.x);
         let hit = getClosestIntersection(enemy.x, enemy.y, angleToPlayer);
         
-        // If the ray hits nothing, OR it hits a wall that is further away than the player...
+        // If the ray hits nothing, or it hits a wall that is further away than the player...
         if (hit == null || hit.dist > distanceToPlayer) {
             enemy.alerted = true; // Player is within 360 radius and unblocked!
         } else {
             enemy.alerted = false; // Player is hiding behind a wall
         }
     });
+}
+
+class Coin{
+    constructor(x,y){
+        this.x = x;
+        this.y = y;
+        this.r = len2*0.2;
+        this.fillStyle = 'gold';
+        this.mask = false;
+        this.draw();
+    }
+    draw(){
+        c.beginPath();
+        c.arc(this.x,this.y,this.r,0,Math.PI*2);
+        c.strokeStyle = 'black';
+        c.lineWidth = 1;
+        c.stroke();
+        c.fillStyle = this.fillStyle;
+        c.fill();
+    }
+}
+
+function dropCoin(enemy){
+    let dice = randInt(1, 6);
+    if (biome == 'Gas Chamber' && (enemy.tank||enemy.sniper) && player.poisoned){
+        console.log("dropped mask");
+        coinArr.push(new Coin(enemy.x,enemy.y));
+        coinArr[coinArr.length-1].mask = true;
+        coinArr[coinArr.length-1].fillStyle = 'gray';
+        return;
+    }
+
+    if ((dice == 6 ||(biome == 'Overgrown' && dice >= 4)) && player.visible){
+        coinArr.push(new Coin(enemy.x,enemy.y));
+    }
+}
+
+function pickUpCoin(){
+    for (let i = 0; i < coinArr.length; i++){
+        if (biome == 'Gas Chamber' && coinArr[i].mask){
+            if (checkCollision(player, coinArr[i])){
+                player.poisoned = false;
+                new Audio("mask.m4a").play();
+                coinArr.splice(i, 1);
+                i--;
+            }
+            continue;
+        }
+        if (checkCollision(player, coinArr[i])){
+            player.money += 10;
+            new Audio("money.mp3").play();
+            coinArr.splice(i, 1);
+            i--;
+        }
+    }
+}
+
+function market(){
+    let buy = prompt("Welcome to the market, you can buy:\n1. 2 points of Health (10 dollars)\n2. Temporary Shield (30 sec) (30 dollars)\n3. Invisibility Potion but no loot dropped (30 sec) (50 dollars) (Press i to activate)\n4. Invincibility potion (10 sec) (60 dollars) (press v to activate)\n5. Score Multiplier for this floor (70 dollars)\n6. Weapon Upgrade (100 dollars) (Can only be purchased twice)\nIf you would like to skip, press anything else");
+    if (buy == '1' && player.money >= 10){
+        player.health+=2;
+        player.money -= 10;
+    }
+    else if (buy == '2' && player.money >= 30){
+        player.shield = 0.5;
+        player.border = 2;
+        setTimeout(() => {
+            player.shield = 0;
+            player.border = 1;
+        }, 30000);
+        player.money -= 30;
+    }
+    else if (buy == '3' && player.money >= 50){
+        player.invisPotion = 1;
+        player.money -= 50;
+    }
+    else if (buy == '4' && player.money >= 60){
+        player.invincPotion = 1;
+        player.money -= 60;
+    }
+    else if (buy == '5' && player.money >= 70){
+        player.scoreMult = 3;
+        player.money -= 70;
+    }
+    else if (buy == '6' && player.money >= 100 && player.damageMult < 1.5){
+        player.damageMult += 0.25;
+        player.money -= 100;
+    }
+}
+
+function invincibility(){
+    if (player.invincPotion == 0){
+        return;
+    }
+    player.invincPotion--;
+    player.shield = 1;
+    player.border = 3;
+    player.color = 'rgb(24, 26, 122)';
+    setTimeout(() => {
+        player.shield = 0;
+        player.border = 1;
+        player.color = 'blue';
+    }, 10000);
+}
+
+function invisibility(){
+    if (player.invisPotion == 0){
+        return;
+    }
+    player.invisPotion--;
+    player.visible = false;
+    player.border = 0;
+    player.color = 'rgba(193, 230, 247, 0.52)';
+    setTimeout(() => {
+        player.visible = true;
+        player.border = 1;
+        player.color = 'blue';
+    }, 30000);
 }
 
 
