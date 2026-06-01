@@ -1,3 +1,4 @@
+// Creating the canvas
 let canvas = document.querySelector("#canvas");
 console.dir(canvas);
 
@@ -17,16 +18,14 @@ function randInt(min,max){
     return Math.floor(Math.random() * (max-min+1) + min);
 }
 
-// function randCol(colors){
-//     return colors[Math.floor(Math.random()*colors.length)];
-// }
-
 function dist(x1,y1,x2,y2){
     return Math.sqrt((x1-x2)**2+(y1-y2)**2);
 }
 
 let keys = {};
-let kill = false;
+let kill = false; // This is used because we sometimes can't automatically exit the animate loop so we need this, lest we get double the frames, meaning double the speed of everything
+
+// Adding event listener for movenement, restarting, potion
 window.addEventListener('keydown',(e) => {
     keys[e.key] = true;
     if (keys['r']){
@@ -34,7 +33,7 @@ window.addEventListener('keydown',(e) => {
         player.scoreMult = 1;
         player.x = window_width/45;
         player.y = window_height/2;
-        if (enemyArr)
+        if (enemyArr.length){
             kill = true; 
             if (player.health > 0){
                 alert("Restarting");
@@ -44,6 +43,7 @@ window.addEventListener('keydown',(e) => {
                 player.invisPotion = 0;
                 player.invincPotion = 0;
             }
+        }
         else if(player.health > 0){
             alert("Next room");
             market();
@@ -118,7 +118,7 @@ function drawHUD(){
 
 let biome;
 let die;
-
+// Generating one of the 6 biomes at random
 function biomeGeneration(){
     player.speed = 2;
     player.maxDist = maxDist;
@@ -172,10 +172,9 @@ function biomeGeneration(){
     }
 }
 
-
+// Initializing the game
 
 function init(){
-    // console.log("initializing");
     roomArr = [];
     enemyArr = [];
     bulletArr = [];
@@ -189,6 +188,7 @@ function init(){
             enemyArr[enemyArr.length-1].health += 2*(biome == 'Overgrown');
         }
     }
+    //generating the rooms and the enemies within
     biomeGeneration();
     animate();
 }
@@ -225,7 +225,7 @@ function animate(){
         alert("You have lost, if you wanna restart then press r");
         return;
     }
-    if (enemyArr == []){
+    if (enemyArr.length == 0){
         new Audio("winning.mp3").play();
         alert("You have cleared this floor!, if you would like to continue, press r");
         return;
@@ -234,6 +234,7 @@ function animate(){
         kill = false;
         return;
     }  
+    //These are the things that happen after game end/room cleared
     pickUpCoin();      
     
     requestAnimationFrame(animate);
@@ -280,6 +281,7 @@ class Room{
                 this.X = this.x + len - border;
             }
         }
+        //Generating a random wall in the room and pushing it into the array
         this.wallArr.push({x: this.X, y: this.Y, w: this.w, h: this.h, rand: this.rand, extra: this.extra});
 
     }
@@ -295,7 +297,7 @@ class Room{
     }
 }
 
-
+//AABB- Axis Aligned Bounding Box
 function checkCollisionWall(blob){
     let Wall = false;
     roomArr.forEach((room) => {
@@ -326,6 +328,8 @@ function checkCollision(blob1,blob2){
     }
     return false;
 }
+
+//Making sure the player doesn't go through the walls
 
 function MOVEPlayer(){
     let Wall = checkCollisionWall(player);
@@ -408,6 +412,7 @@ class Enemy{
         this.cloaked = false;
         this.tank = false;
         this.fillStyle = 'red';
+        // Generating one of the enemy types
         let dice = randInt(1,20);
         if (dice == 10 || (biome == 'Cursed' && dice == 20)){
             this.sniper = true;
@@ -455,7 +460,7 @@ class Enemy{
     }
     shoot(){
         if (!player.visible || this.cloaked){
-            return;
+            return;  // If player either invisible or enemy is cloaked then don't shoot
         }
         let tan = (player.y - this.y)/(this.x-player.x)*(-1);
         let up = 1;
@@ -485,6 +490,7 @@ class Bullet{
         this.draw();
     }
     draw(){
+        // Bounicing mechanic of the bullet
         if (this.x>=innerWidth-this.r || this.x<=this.r){
             this.dx=-this.dx;
             this.bounce--;
@@ -497,11 +503,12 @@ class Bullet{
 
         if (this.bounce<0){
             bulletArr = bulletArr.filter(bullet => bullet != this);
-        }
+        } // Max 4 bounces allowed
 
         this.x+=this.dx;
         this.y+=this.dy;
-
+        
+        // Hitting mechanic of the bullet
         enemyArr.forEach( (enemy) => {
             if (this.range && checkCollision(this,enemy)){
                 bulletArr = bulletArr.filter(bullet => bullet != this);
@@ -568,7 +575,7 @@ class Bullet{
 
 }
 
-
+// shoots a bullet on clicking
 window.addEventListener('click', (e) => {
     let tan = (player.y - e.y)/(e.x-player.x)*(-1);
     let up =1;
@@ -594,6 +601,8 @@ let FOV = Math.PI / 3;
 let maxDist = 80;
 let rayCount = 50;
 
+// Raycasting for radial vision
+
 function drawRadialVision() {
     c.beginPath();
     c.rect(0, 0, window_width, window_height);
@@ -602,6 +611,7 @@ function drawRadialVision() {
     c.moveTo(player.x, player.y);
     let playerAngle = Math.atan2(mouse.y - player.y, mouse.x - player.x); 
     
+    // Drawing the rays upto a wall or maxDist
     for (let i = 0; i <= rayCount; i++) {
         let rayAngle = (playerAngle - FOV / 2) + (FOV * (i / rayCount));
         let hit = getClosestIntersection(player.x, player.y, rayAngle); 
@@ -614,9 +624,10 @@ function drawRadialVision() {
     }
 
     c.fillStyle = "rgba(0, 0, 0, 1)"; 
-    c.fill("evenodd"); 
+    c.fill("evenodd");   // Makes everything except us and the radial cone black
 }
 
+// checks whether a ray hit the wall or not or a door
 function getClosestIntersection(x, y, angle) {
     let closest = null;
     let minDistance = Infinity;
@@ -636,8 +647,9 @@ function getClosestIntersection(x, y, angle) {
                     hit.y >= door.y && 
                     hit.y <= door.y + door.h
                 );
+                //hitting
 
-                // Only count the hit if it is NOT inside the door gap
+                // hitting if it is not inside the door gap
                 if (!hitIsInsideDoor && hit.dist < minDistance) {
                     minDistance = hit.dist;
                     closest = hit;
@@ -648,6 +660,7 @@ function getClosestIntersection(x, y, angle) {
     return closest; 
 }
 
+// casts the ray the required x and y
 function castRay(x, y, angle, wall) {
     let x1 = wall.x, y1 = wall.y;
     let x2=x1,y2=y1;
@@ -663,7 +676,7 @@ function castRay(x, y, angle, wall) {
     let y4 = y + Math.sin(angle);
 
     let den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-    if (den === 0) return null;
+    if (den == 0) return null;
 
     let t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
     let u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / den;
@@ -680,6 +693,7 @@ function castRay(x, y, angle, wall) {
     return null;
 }
 
+// makes the radial visibility cone of enemy
 function checkEnemyVisibility() {
     enemyArr.forEach(enemy => {
         // Distance Check
@@ -696,7 +710,7 @@ function checkEnemyVisibility() {
         
         // If the ray hits nothing, or it hits a wall that is further away than the player...
         if (hit == null || hit.dist > distanceToPlayer) {
-            enemy.alerted = true; // Player is within 360 radius and unblocked!
+            enemy.alerted = true; // Player is within specified radius and unblocked
         } else {
             enemy.alerted = false; // Player is hiding behind a wall
         }
@@ -723,6 +737,7 @@ class Coin{
     }
 }
 
+// randomly dropping a coin (or a mask if gas chamber biome and tank or sniper)
 function dropCoin(enemy){
     let dice = randInt(1, 6);
     if (biome == 'Gas Chamber' && (enemy.tank||enemy.sniper) && player.poisoned){
@@ -738,6 +753,7 @@ function dropCoin(enemy){
     }
 }
 
+// Picking up a coin (or mask)
 function pickUpCoin(){
     for (let i = 0; i < coinArr.length; i++){
         if (biome == 'Gas Chamber' && coinArr[i].mask){
@@ -758,6 +774,7 @@ function pickUpCoin(){
     }
 }
 
+// The marketplace
 function market(){
     let buy = prompt("Welcome to the market, you can buy:\n1. 2 points of Health (10 dollars)\n2. Temporary Shield (30 sec) (30 dollars)\n3. Invisibility Potion but no loot dropped (30 sec) (50 dollars) (Press i to activate)\n4. Invincibility potion (10 sec) (60 dollars) (press v to activate)\n5. Score Multiplier for this floor (70 dollars)\n6. Weapon Upgrade (100 dollars) (Can only be purchased twice)\nIf you would like to skip, press anything else");
     if (buy == '1' && player.money >= 10){
