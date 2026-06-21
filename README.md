@@ -1,23 +1,24 @@
-Rendering  Flow:
-First I clear the entire canvas
-then I draw the rooms, enemies, coins, bullets respectively
-then I make the radial cone then player then HUD
+# 🎯 2D Canvas Top-Down Shooter
 
-Game Loop:
-My game loop is the animate() function 
-I use requestAnimationFrame function at the end to call it again and again
-In it I update the postion of the player, do bullet updates, then win/loss condition.
+A dynamic, top-down 2D shooter built entirely with vanilla JavaScript and the HTML5 Canvas API. This game features procedural room generation, various enemy archetypes, dynamic biomes with unique environmental effects, and a raycasted field-of-view system that hides enemies out of your line of sight.
 
-State Management Approach:
-i use arrays for bullets, enemnies,rooms and walls
-I use player object which holds its properties like health score etc.
-I also use global variables like biome, keys etc.
+## 🧠 Architecture & State Management
 
-Collision Detection Method:
-Circle-Circle collision:- using the dist between its two centers and checking if its less than or equal addition of their radii
-Circle-Rectangle collions:- AABB Axis-Aligned Bounding Box 
-Ray-casting for line-of-sight check
+The game relies on lightweight, vanilla JavaScript structures to maintain state and handle entities without the overhead of external frameworks.
 
-Room Generation Logic:
-I use nested for loops to create the rooms using i+=2 and j+=2 in init() function at a specific interval
-Inside the Room constructor I take a random integer from 0 to 3 to decide which of the 4 doors the doow will cut through
+* **Global Entities:** Active game objects are stored in dedicated arrays (`roomArr`, `enemyArr`, `bulletArr`, `coinArr`) which are iterated over during each frame.
+* **The Player Object:** A central `player` class stores essential properties (health, score, money, active potions, damage multipliers) and updates dynamically.
+* **Environment State:** Global variables track the current `biome` (which modifies canvas styles and gameplay mechanics) and user inputs via a `keys` dictionary.
+
+## 🔄 Game Loop & Rendering Flow
+
+The core of the engine is driven by the `animate()` function, utilizing `requestAnimationFrame` for smooth rendering. The rendering pipeline strictly follows this order to ensure proper layering:
+
+1.  **Clear Context:** The canvas is completely cleared at the start of the frame.
+2.  **Draw Environment:** Rooms and walls are rendered first.
+3.  **Draw Entities:** Enemies (if not cloaked/hidden) and dropped coins are drawn.
+4.  **Draw Projectiles:** Active bullets are rendered as they traverse the screen.
+5.  **Calculate & Render Field of View:** A radial vision cone is generated using raycasting, applying a shadow mask to areas the player cannot see.
+6.  **Draw Player:** Rendered on top of the FOV mask to ensure visibility.
+7.  **Draw HUD:** The Heads-Up Display (Score, Health, Money, Potions, and Biome) is drawn on the top-most layer.
+8.  **Evaluate State:** The loop calculates
